@@ -3,7 +3,9 @@ This repository contains the statistical analysis scripts and generated results 
 
 **Comparative Analysis of TOG Measurement Techniques in Salty Produced Water** 
 
->Submitted to Results in Engineering (under review)
+>This repository contains the data and source code used to generate the results presented in the following manuscript:
+
+Everton Trento Jr., Pedro I.S. Morales, Joel R. Karp, Eduardo Nunes dos Santos, Henrique Stel, Moisés A. Marcelino Neto, Rigoberto E.M. Morales, Comparative analysis of TOG measurement techniques in salty produced water, Results in Engineering, Volume 32, 2026,112806, ISSN 2590-1230, https://doi.org/10.1016/j.rineng.2026.112806.  [![DOI](https://img.shields.io/badge/DOI-Link-blue?style=flat-square&logo=doi)](https://doi.org/10.1016/j.rineng.2026.112806)
 
 **Authors:**
 Everton Trento Jr., Pedro I. S. Morales, Joel R. Karp, Eduardo Nunes dos Santos, Henrique Stel, Moisés A. Marcelino Neto, and Rigoberto E. M. Morales
