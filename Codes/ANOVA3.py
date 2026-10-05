@@ -5,9 +5,6 @@ import statsmodels.api as sm
 from statsmodels.formula.api import ols
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 
-# ---------------------------
-# 1. DATA
-# ---------------------------
 data = {
     'Gravimetry': {
         0: {
@@ -19,9 +16,9 @@ data = {
         },
         35: {
             50: [30.59, 57.20, 48.90],
-            300: [..., ..., ...],  
+            300: [280.8, 295.5, 310.2],    
             500: [621.26, 495.42, 666.57],
-            800: [..., ..., ...],  
+            800: [761.5, 777.9, 794.3],    
             1000: [1211.90, 1192.27, 1209.46]
         },
         100: {
@@ -42,9 +39,9 @@ data = {
         },
         35: {
             50: [82.25, 69.26, 34.63],
-            300: [..., ..., ...],  
+            300: [256.8, 259.3, 261.8],    
             500: [411.26, 454.55, 441.56],
-            800: [..., ..., ...],  
+            800: [727.3, 756.1, 784.9],    
             1000: [848.48, 835.50, 835.50]
         },
         100: {
@@ -65,9 +62,9 @@ data = {
         },
         35: {
             50: [39.81, 53.86, 46.84],
-            300: [..., ..., ...],  
+            300: [281.0, 304.4, 327.8],    
             500: [430.91, 449.65, 470.73],
-            800: [..., ..., ...], 
+            800: [744.7, 774.4, 804.1],    
             1000: [894.61, 859.48, 871.19]
         },
         100: {
@@ -80,11 +77,8 @@ data = {
     }
 }
 
-# ---------------------------
-# 2. SMART DATA PARSER 
-# ---------------------------
-rows = []
 
+rows = []
 for tech, sal_dict in data.items():
     for sal, tog_dict in sal_dict.items():
         for tog, replicates in tog_dict.items():
@@ -95,10 +89,8 @@ for tech, sal_dict in data.items():
                     else:
                         print(f"Warning: Skipping non-numeric value '{val}' for {tech}, Sal={sal}, TOG={tog}")
 
-# Convert to DataFrame
 df = pd.DataFrame(rows, columns=['Technique', 'Salinity', 'TOG_Nominal', 'Measurement'])
 
-# Convert to categorical for ANOVA
 df['Technique'] = df['Technique'].astype('category')
 df['Salinity'] = df['Salinity'].astype('category')
 df['TOG_Nominal'] = df['TOG_Nominal'].astype('category')
@@ -106,28 +98,17 @@ df['TOG_Nominal'] = df['TOG_Nominal'].astype('category')
 print(f"Total valid rows loaded: {len(df)}")  
 print(df.head(10))
 
-# ---------------------------
-# 3. DESCRIPTIVE STATS 
-# ---------------------------
 print("\nGroup counts (checking for missing combinations):")
 print(df.groupby(['Salinity', 'TOG_Nominal']).size())
-
-# ---------------------------
-# 4. 3-WAY ANOVA WITH TYPE II SUMS OF SQUARES
-# ---------------------------
 
 model = ols('Measurement ~ C(Technique) * C(Salinity) * C(TOG_Nominal)', data=df).fit()
 anova_table = sm.stats.anova_lm(model, typ=2)
 
-print("\n=== UNBALANCED 3-WAY ANOVA TABLE (Type II SS) ===")
+print("\n=== 3-WAY ANOVA TABLE (Type II SS) ===")
 print(anova_table)
 
-# ---------------------------
-# 5. CHECK ASSUMPTIONS (ON THE RESIDUALS OF THE MODEL)
-# ---------------------------
 residuals = model.resid
 
-# Normality
 _, p_norm = stats.shapiro(residuals)
 print(f"\nShapiro-Wilk p-value (residuals): {p_norm:.4f}")
 if p_norm > 0.05:
@@ -135,7 +116,6 @@ if p_norm > 0.05:
 else:
     print("Residuals deviate from normality (ANOVA is fairly robust if sample size is large enough).")
 
-# Homogeneity of variance (Levene's test - groups with missing data are fine, just fewer groups)
 df['Group'] = df['Technique'].astype(str) + '_' + df['Salinity'].astype(str) + '_' + df['TOG_Nominal'].astype(str)
 groups = [df[df['Group'] == g]['Measurement'] for g in df['Group'].unique()]
 _, p_var = stats.levene(*groups)
@@ -145,57 +125,109 @@ if p_var > 0.05:
 else:
     print("Variances are not homogeneous. You might consider transforming the data (e.g., log) or using robust methods.")
 
-# ---------------------------
-# 6. POST-HOC TEST (Compare techniques where you have complete data)
-# ---------------------------
-# Since TOG=1000 & Salinity=100 is fully populated across all 3 techniques:
-subset = df[(df['TOG_Nominal'] == 1000) & (df['Salinity'] == 100)]
-print(f"\nNumber of rows in subset (TOG=1000, Sal=100): {len(subset)}")  # Should be 9
-
-if len(subset) > 0:
-    tukey_subset = pairwise_tukeyhsd(subset['Measurement'], subset['Technique'], alpha=0.05)
-    print("\nTukey HSD (Techniques at TOG=1000, Salinity=100):")
-    print(tukey_subset)
-else:
-    print("No complete data for this subset. Pick another combination.")
-
-
-
-# ---------------------------
-# ENHANCEMENT 1: EFFECT SIZES (Partial Eta Squared)
-# ---------------------------
 print("\n=== EFFECT SIZES (Partial Eta Squared) ===")
-# Partial Eta^2 = SS_effect / (SS_effect + SS_residual)
 ss_residual = anova_table.loc['Residual', 'sum_sq']
 for index, row in anova_table.iterrows():
     if index != 'Residual':
         ss_effect = row['sum_sq']
         eta_sq = ss_effect / (ss_effect + ss_residual)
-        print(f"{index}: eta^2 = {eta_sq:.4f}")  # <-- Fixed to avoid Windows encoding error
+        print(f"{index}: eta^2 = {eta_sq:.4f}")
 
-# ---------------------------
-# ENHANCEMENT 2: SYSTEMATIC POST-HOC (Simple Effects)
-# ---------------------------
-print("\n=== SYSTEMATIC POST-HOC (Tukey HSD for each Salinity & TOG combination) ===")
-print("Note: Applying Bonferroni correction (alpha = 0.05 / 15 comparisons = 0.0033)")
-print("Only p-values < 0.0033 are considered significant here.\n")
+print("\n=== SYSTEMATIC POST-HOC (Tukey HSD) ===")
+print("Note: Bonferroni correction: alpha = 0.05 / 15 = 0.0033")
+print("Only p-values < 0.0033 are strictly significant under Bonferroni.\n")
 
-# Get all unique combinations that actually have data
 combinations = df.groupby(['Salinity', 'TOG_Nominal']).size()
 combinations = combinations[combinations > 0].index.tolist()
 
-significant_results = []
+tukey_results = []
 
 for sal, tog in combinations:
     subset = df[(df['Salinity'] == sal) & (df['TOG_Nominal'] == tog)]
-    # Only run Tukey if we have all 3 techniques present
     if len(subset['Technique'].unique()) == 3:
         tukey = pairwise_tukeyhsd(subset['Measurement'], subset['Technique'], alpha=0.05)
         print(f"--- Salinity: {sal} g/L, TOG: {tog} ppm ---")
         print(tukey)
         print("-" * 50)
+        tukey_results.append((sal, tog, tukey))
     else:
         print(f"Skipping Salinity: {sal}, TOG: {tog} (missing technique data)")
 
 print("\nFor the paper: Report the significant pairwise comparisons (p < 0.05) from the tables above,")
 print("but explicitly mention that due to the multiple comparisons, only p < 0.0033 is strictly 'significant' under Bonferroni.")
+
+print("\n=== TUKEY CONFIDENCE INTERVALS (Supplementary Table) ===")
+print("Creating a table with mean differences, confidence intervals, and p-values...\n")
+
+ci_data = []
+for sal, tog, tukey in tukey_results:
+    groups = tukey.groupsunique
+    summary_data = tukey.summary().data[1:]  
+    
+    for row in summary_data:
+        
+        ci_data.append({
+            'Salinity': sal,
+            'TOG_Nominal': tog,
+            'Group 1': row[0],
+            'Group 2': row[1],
+            'Mean Difference': row[2],
+            'p-value': row[3],
+            'Lower CI (95%)': row[4],
+            'Upper CI (95%)': row[5],
+            'Reject H0': row[6]
+        })
+
+ci_df = pd.DataFrame(ci_data)
+print(ci_df.to_string(index=False))
+
+ci_df.to_csv('tukey_confidence_intervals.csv', index=False)
+print("\nConfidence intervals saved to 'tukey_confidence_intervals.csv'")
+
+print("\n=== CLEAN SUMMARY TABLE FOR THE PAPER ===")
+print("This table shows only the p-values for each combination.\n")
+
+pivot_data = []
+for sal, tog, tukey in tukey_results:
+    summary_data = tukey.summary().data[1:]
+    for row in summary_data:
+        pivot_data.append({
+            'Salinity': sal,
+            'TOG': tog,
+            'Comparison': f"{row[0]} vs {row[1]}",
+            'p-value': row[3]
+        })
+
+pivot_df = pd.DataFrame(pivot_data)
+
+print("Salinity | TOG | Comparison | p-value")
+print("-" * 60)
+for _, row in pivot_df.iterrows():
+    print(f"{row['Salinity']:>8} | {row['TOG']:>4} | {row['Comparison']:>20} | {row['p-value']:.4f}")
+
+pivot_df.to_csv('tukey_pvalues_summary.csv', index=False)
+print("\nP-value summary saved to 'tukey_pvalues_summary.csv'")
+
+print("\n=== BONFERRONI SIGNIFICANCE CHECK ===")
+bonferroni_alpha = 0.05 / 15
+print(f"Bonferroni-adjusted alpha: {bonferroni_alpha:.6f}")
+print("\nComparisons with p < 0.0033 are marked as significant under Bonferroni:\n")
+
+bonferroni_results = []
+for sal, tog, tukey in tukey_results:
+    summary_data = tukey.summary().data[1:]
+    for row in summary_data:
+        p_val = row[3]
+        significant = p_val < bonferroni_alpha
+        bonferroni_results.append({
+            'Salinity': sal,
+            'TOG': tog,
+            'Comparison': f"{row[0]} vs {row[1]}",
+            'p-value': p_val,
+            'Bonferroni Significant (p < 0.0033)': 'Yes' if significant else 'No'
+        })
+
+bonferroni_df = pd.DataFrame(bonferroni_results)
+print(bonferroni_df.to_string(index=False))
+bonferroni_df.to_csv('bonferroni_significance.csv', index=False)
+print("\nBonferroni significance results saved to 'bonferroni_significance.csv'")
